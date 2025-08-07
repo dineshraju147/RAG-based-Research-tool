@@ -11,6 +11,7 @@ from langchain_groq import ChatGroq
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 import requests
 from langchain_community.document_loaders import UnstructuredHTMLLoader
+from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from tempfile import NamedTemporaryFile
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -93,6 +94,56 @@ def process_urls(urls):
     vector_store.add_documents(split_docs, ids = uuids)
 
     yield "Done adding docs into vector database...:)"
+
+# ------------------Processing docs------------------------
+# rag.py
+from langchain_community.document_loaders import PyPDFLoader, TextLoader
+
+def process_docs(files):
+    """
+    Takes a list of file paths and stores their content in ChromaDB.
+    :param files: list of file paths (PDF or TXT)
+    """
+    yield "Initializing Components..."
+    initialize_components()
+    yield "Resetting VectorStore..."
+    vector_store.reset_collection()
+
+    yield "Adding Documents to VectorStore..."
+
+    raw_docs = []
+    for file_path in files:
+        ext = file_path.split('.')[-1].lower()
+        if ext == "pdf":
+            loader = PyPDFLoader(file_path)
+        elif ext == "txt":
+            loader = TextLoader(file_path, encoding='utf-8')
+        else:
+            yield f"Skipping unsupported file type: {file_path}"
+            continue
+        docs = loader.load()
+        # Change source to filename instead of temp path
+        for doc in docs:
+            doc.metadata["source"] = Path(file_path).name
+        raw_docs.extend(docs)
+
+
+
+    # Split into chunks
+    yield "Splitting text into Chunks..."
+    text_splitter = RecursiveCharacterTextSplitter(
+        separators=["\n\n", "\n", ".", " "],
+        chunk_size=CHUNK_SIZE
+    )
+    split_docs = text_splitter.split_documents(raw_docs)
+
+    # Add to vector store
+    yield "Storing Chunks in VectorStore..."
+    uuids = [str(uuid4()) for _ in range(len(split_docs))]
+    vector_store.add_documents(split_docs, ids=uuids)
+
+    yield "Done adding docs into vector database...:)"
+
 
 def generate_answer(query):
     if not vector_store:

@@ -1,8 +1,11 @@
 import streamlit as st
-from rag import process_urls , generate_answer
+from rag import process_urls , generate_answer, process_docs
+from tempfile import NamedTemporaryFile
 
-st.title('Real Estate Research Tool')
 
+st.title('Research Assistant Tool')
+
+# ------------------ URL Processing ------------------
 url1 = st.sidebar.text_input('Enter URL 1')
 url2 = st.sidebar.text_input('Enter URL 2')
 url3 = st.sidebar.text_input('Enter URL 3')
@@ -16,6 +19,28 @@ if process_url_button:
     else:
         for status in process_urls(urls):
             placeholder.text(status)
+
+# ------------------ Document Upload Processing ------------------
+st.sidebar.header("📂 Upload Documents")
+uploaded_files = st.sidebar.file_uploader(
+    'Upload a PDF or TXT file',
+    type=['pdf', 'txt'],
+    accept_multiple_files=True
+)
+process_docs_button = st.sidebar.button('Process Docs')
+if process_docs_button:
+    if not uploaded_files:
+        placeholder.text("You must provide at least one document.")
+    else:
+        temp_paths = []
+        for uploaded_file in uploaded_files:
+            # Save uploaded file temporarily
+            with NamedTemporaryFile(delete=False, suffix=f'.{uploaded_file.name.split(".")[-1]}') as tmp:
+                tmp.write(uploaded_file.read())
+                temp_paths.append(tmp.name)
+        for status in process_docs(temp_paths):
+            placeholder.text(status)
+
 
 query = placeholder.text_input("Question")
 if query:
