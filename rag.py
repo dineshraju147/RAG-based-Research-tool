@@ -93,65 +93,62 @@ def process_urls(urls):
     uuids = [str(uuid4()) for _ in range(len(split_docs))]
     vector_store.add_documents(split_docs, ids = uuids)
 
-    yield "Done adding docs into vector database...:)"
+    yield "Done adding URL content!"
 
 # ------------------Processing docs------------------------
-# rag.py
-from langchain_community.document_loaders import PyPDFLoader, TextLoader
-
-def process_docs(files):
+def process_docs(files_with_names):
     """
-    Takes a list of file paths and stores their content in ChromaDB.
-    :param files: list of file paths (PDF or TXT)
+    Ingest uploaded PDFs/TXTs into ChromaDB.
+    files_with_names = [(temp_file_path, original_filename), ...]
     """
     yield "Initializing Components..."
     initialize_components()
-    yield "Resetting VectorStore..."
-    vector_store.reset_collection()
-
-    yield "Adding Documents to VectorStore..."
+    yield "Loading document data..."
 
     raw_docs = []
-    for file_path in files:
-        ext = file_path.split('.')[-1].lower()
+    for file_path, original_name in files_with_names:
+        ext = original_name.split('.')[-1].lower()
         if ext == "pdf":
             loader = PyPDFLoader(file_path)
         elif ext == "txt":
             loader = TextLoader(file_path, encoding='utf-8')
         else:
-            yield f"Skipping unsupported file type: {file_path}"
+            yield f"Skipping unsupported file type: {original_name}"
             continue
+
         docs = loader.load()
-        # Change source to filename instead of temp path
         for doc in docs:
-            doc.metadata["source"] = Path(file_path).name
+            doc.metadata["source"] = original_name  # store real filename
         raw_docs.extend(docs)
 
-
-
-    # Split into chunks
-    yield "Splitting text into Chunks..."
+    yield "Splitting text into chunks..."
     text_splitter = RecursiveCharacterTextSplitter(
         separators=["\n\n", "\n", ".", " "],
         chunk_size=CHUNK_SIZE
     )
     split_docs = text_splitter.split_documents(raw_docs)
 
-    # Add to vector store
-    yield "Storing Chunks in VectorStore..."
+    yield "Adding chunks to VectorStore..."
     uuids = [str(uuid4()) for _ in range(len(split_docs))]
     vector_store.add_documents(split_docs, ids=uuids)
 
-    yield "Done adding docs into vector database...:)"
+    yield "Done adding document content!"
 
+#--------------generating the answer----------------------------
 
-def generate_answer(query):
+def generate_answer(query, return_context=False):
     if not vector_store:
         raise RuntimeError("Vector database not initialized!!!")
     chain = RetrievalQAWithSourcesChain.from_llm(llm = llm, retriever = vector_store.as_retriever())
     result = chain.invoke({"question": query}, return_only_outputs=True)
-    sources = result.get("sources","")
-    return result['answer'], sources
+    answer = result.get("answer", "")
+    sources = result.get("sources", "")
+
+    # if return_context:
+    #     # Pull retrieved docs for highlighting
+    #     docs = retriever.get_relevant_documents(query)
+    #     return answer, sources, docs
+    return answer, sources
 
 
 
